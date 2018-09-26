@@ -13,28 +13,28 @@
 % 12/21/17   dhb    Ablate direct calls to fft2/ifft2 in deference to common
 %                   routine.
 
+%%
+ieInit
+
 %% This is the basic radiance to irradiance code 
 % Creates an array of points
 scene = sceneCreate('point array');   
 scene = sceneSet(scene,'hfov',0.5);  
 ieAddObject(scene); sceneWindow;
 
-% Diffraction limited optics
-oi = oiCreate;                        
+%% Diffraction limited optics
+oi = oiCreate('diffraction limited');                        
 
 % Compute optical image and show it
 oi = oiCompute(scene,oi);
 ieAddObject(oi); oiWindow;
 
 %% Make a bigger f-number, compute and show
-optics = oiGet(oi,'optics');
-fnSmall = opticsGet(optics,'f number');
-fnBig   = 3* fnSmall;
-
-optics = oiGet(oi,'optics');
-optics = opticsSet(optics,'fNumber',fnBig);
-oi2 = oiSet(oi,'optics',optics);
+fnSmall = oiGet(oi,'optics fnumber');
+fnBig   = 1.5 * fnSmall;
+oi2 = oiSet(oi,'optics fnumber',fnBig);
 oi2 = oiCompute(scene,oi2);
+oi2 = oiSet(oi2,'name',sprintf('lens f# %d\n',fnBig));
 ieAddObject(oi2); oiWindow;
 
 %% Plot the psf of the optics

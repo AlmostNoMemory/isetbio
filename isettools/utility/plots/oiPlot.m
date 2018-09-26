@@ -364,7 +364,7 @@ switch pType
 
         nWave = oiGet(oi, 'nwave');
         wList = oiGet(oi, 'wavelength');
-        [row, col] = size(irrad);
+        [row, col, ~] = size(irrad);
         if nWave > 1
             imageSPD(irrad, wave, [], row, col, 1, xCoords, yCoords);
         else
@@ -384,8 +384,8 @@ switch pType
         tmp = -1 * fliplr(yGrid);
         yGrid = [tmp(1:(end - 1)), yGrid];
 
-        set(gca, 'xcolor', [.5 .5 .5]);
-        set(gca, 'ycolor', [.5 .5 .5]);
+        set(gca, 'xcolor', [.2 .2 .2]);
+        set(gca, 'ycolor', [.2 .2 .2]);
         set(gca, 'xtick', xGrid, 'ytick', yGrid);
         grid on
         set(g, 'Name', sprintf('Irradiance with grid'));
@@ -1055,8 +1055,8 @@ switch lower(pType)
         elseif length(varargin) >= 1
             thisWave = varargin{1};
         else
-            thisWave = ieReadNumber('Select PSF wavelength (nm)', 550, ...
-                '%.0f');
+            thisWave = ...
+                ieReadNumber('Select PSF wavelength (nm)', 550, '%.0f');
         end
 
         opticsModel = opticsGet(optics, 'model');

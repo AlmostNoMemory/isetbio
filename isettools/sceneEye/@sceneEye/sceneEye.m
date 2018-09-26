@@ -270,8 +270,13 @@ methods
         p.addParameter('pointDistance',1,@isnumeric);
         p.addParameter('gamma','true',@ischar); % texturedPlane
         p.addParameter('useDisplaySPD',0); % texturedPlane
-        p.addParameter('whiteDepth',1,@isnumeric); %slantedBarAdjustable
-        p.addParameter('blackDepth',1,@isnumeric); %slantedBarAdjustable
+        
+        p.addParameter('whiteDepth',1,@isnumeric); % slantedBarAdjustable
+        p.addParameter('blackDepth',1,@isnumeric); % slantedBarAdjustable
+        
+        p.addParameter('frontDepth',1,@isnumeric); % slantedBarTexture
+        p.addParameter('backDepth',2,@isnumeric);  % slantedBarTexture
+        
         p.addParameter('objectDistance',1,@isnumeric); %snellenSingle
         p.addParameter('objectSize',[0.3 0.3],@isnumeric); %snellenSingle
         
@@ -287,12 +292,14 @@ methods
             recipe.camera = piCameraCreate('realisticEye');
         end
 
-        % Set properties
+        % Set eye model properties
         obj.name = p.Results.name;
         obj.modelName = 'Navarro'; % Default
-        obj.resolution = recipe.film.xresolution.value;
+        
+        % Set retina properties
         obj.retinaDistance = recipe.camera.retinaDistance.value;
         obj.pupilDiameter = recipe.camera.pupilDiameter.value;
+        obj.resolution = recipe.film.xresolution.value;
 
         obj.retinaDistance = recipe.camera.retinaDistance.value;
         obj.retinaRadius = recipe.camera.retinaRadius.value;
@@ -313,6 +320,7 @@ methods
             obj.accommodation = str2double(value{1});
         end
 
+        % Rendering properties
         obj.numRays = recipe.sampler.pixelsamples.value;
 
         % These two are often empty, so let's do checks here. However, 
@@ -334,8 +342,8 @@ methods
 
         if(~isempty(recipe.lookAt))
             obj.eyePos = recipe.lookAt.from;
-            obj.eyeTo = recipe.lookAt.to;
-            obj.eyeUp = recipe.lookAt.up;
+            obj.eyeTo  = recipe.lookAt.to;
+            obj.eyeUp  = recipe.lookAt.up;
         end
 
         obj.recipe = recipe;
@@ -348,13 +356,13 @@ methods
     end
 
     %% Get methods for dependent variables
-    % In PBRT, the image height is equivalent to the size of the chord on
-    % the back of the spherical retina. We have to do the complex
-    % calculation below in order to find an image size that would give us
-    % the desired FOV. We want to measure the FOV from the back of the
-    % lens. 
     %
-    % I will attempt to illustrate this in ascii:
+    % In PBRT, the image height is equivalent to the size of the chord
+    % on the back of the spherical retina. We have to do the complex
+    % calculation below in order to find an image size that would give
+    % us the desired FOV. We want to measure the FOV from the back of
+    % the lens.
+    %
     %{
                        ooo OOO OOO ooo
                    oOO                 OOo
@@ -378,6 +386,7 @@ methods
                    oOO                 OOo
                        ooo OOO OOO ooo
     %}
+    %
     % Calculations:
     % retinaDistance = d + a + b
     % a^2 + x^2 = r^2

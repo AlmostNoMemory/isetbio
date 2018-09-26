@@ -127,7 +127,7 @@ if displayFlag >= 1
     if ~isequal(gam, 1), RGB = RGB .^ gam; end
     
     % Choose the display method
-    if notDefined('xcoords') || notDefined('ycoords')
+    if notDefined('xCoords') || notDefined('yCoords')
         % No coordinates, just the image. This is used in the sceneWindow.
         imagescRGB(RGB);
         axis image; 
