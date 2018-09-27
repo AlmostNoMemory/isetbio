@@ -20,7 +20,7 @@ function varargout = sceneWindow(varargin)
 %
 % Copyright ImagEval Consultants, LLC, 2003.
 
-% Last Modified by GUIDE v2.5 26-Mar-2018 11:01:20
+% Last Modified by GUIDE v2.5 16-Nov-2016 21:15:32
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -30,7 +30,7 @@ gui_State = struct('gui_Name',       mfilename, ...
     'gui_OutputFcn',  @sceneWindow_OutputFcn, ...
     'gui_LayoutFcn',  [] , ...
     'gui_Callback',   []);
-if nargin && ischar(varargin{1})
+if nargin & isstr(varargin{1})
     gui_State.gui_Callback = str2func(varargin{1});
 end
 
@@ -43,18 +43,15 @@ end
 
 % --- Executes just before sceneWindow is made visible.
 function sceneWindow_OpeningFcn(hObject, eventdata, handles, varargin)
-% Opening function for this window
 
-% Update handles structure
-handles.output = hObject;
-guidata(hObject, handles);
-vcSetFigureHandles('SCENE',hObject,eventdata,handles);
+sceneOpen(hObject,eventdata,handles) 
+sceneRefresh(hObject, eventdata, handles);
 
-%  Check the preferences for ISET and adjust the font size.
-ieFontInit(hObject);
-
-% Refresh the window.
-sceneRefresh(hObject, eventdata, handles); 
+ISETprefs = getpref('ISET');
+if isfield(ISETprefs,'wPos')
+    wPos = ISETprefs.wPos;
+    if ~isempty(wPos{2}), set(hObject,'Position',wPos{2}); end
+end
 
 return
 
@@ -80,7 +77,7 @@ return
 function editDistance_Callback(hObject, eventdata, handles)
 
 % Should be set(SCENE,'editDistance',value);
-[val,scene] = vcGetSelectedObject('SCENE');
+[scene,val] = vcGetObject('SCENE');
 if ~isempty(scene)
     scene.distance = str2double(get(hObject,'String'));
     scene.consistency = 0;
@@ -159,6 +156,30 @@ sceneRefresh(hObject, eventdata, handles);
 
 return;
 
+% --- Executes on button press in btnPrev.
+function btnPrev_Callback(hObject, eventdata, handles)
+% Push button with the - on the left of the selection popup
+s  = ieSessionGet('selected','scene');
+nS = ieSessionGet('nobjects','scene');
+s = min(s - 1,nS);
+s = max(s,1);
+vcSetSelectedObject('scene',s);
+sceneRefresh(hObject, eventdata, handles);
+return;
+
+% --- Executes on button press in btnNext.
+function btnNext_Callback(hObject, eventdata, handles)
+% Push button with the + on the right of the selection popup
+s  = ieSessionGet('selected','scene');
+nS = ieSessionGet('nobjects','scene');
+s = min(s + 1,nS);
+s = max(s,1);
+vcSetSelectedObject('scene',s);
+sceneRefresh(hObject, eventdata, handles);
+return;
+
+
+
 % --- Executes during object creation, after setting all properties.
 function editRow_CreateFcn(hObject, eventdata, handles)
 if ispc
@@ -199,13 +220,35 @@ sceneRefresh(hObject,eventdata,handles);
 
 return;
 
+% --------------------------------------------------------------------
+function menuEditScaleSize_Callback(hObject, eventdata, handles)
+% hObject    handle to menuEditScaleSize (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+scene = vcGetObject('scene');
+
+% Call GUI to set neﬂw row and col dimensions.
+sFactor = ieReadNumber('Spatial scale',2,'%.0f');
+if isempty(sFactor), disp('User canceled'); return; end
+
+% rc = sceneSetRowCol;
+figure(gcbf);  % Return control to this figure.
+scene = sceneInterpolate(scene,sFactor);
+vcReplaceObject(scene);
+sceneRefresh(hObject, eventdata, handles);
+
+return
+
 % --- Executes on button press in btnInterpolate.
 function btnInterpolate_Callback(hObject, eventdata, handles)
-% Call back from the 'Interp' button
-%
+% btnInterp - eliminate 
+% 
 % Read the data in the row and col edit fields.  Re-sample the current data
 % in the photons field so that it has the desired number of rows and
 % columns.
+% 
+%
 [val,scene] = vcGetSelectedObject('SCENE');
 sz = sceneGet(scene,'size');
 r0 = sz(1); c0 = sz(2);
@@ -248,7 +291,7 @@ if ~checkfields(scene,'data','luminance')
     [lum, meanL] = sceneCalculateLuminance(scene);
     scene = sceneSet(scene,'luminance',lum);
     scene = sceneSet(scene,'meanLuminance',meanL);
-    ieReplaceObject(scene,val);
+    vcReplaceAndSelectObject(scene,val);
 end
 
 % Plots log10 or linear luminance
@@ -264,7 +307,7 @@ function menPlotLumLin_Callback(hObject, eventdata, handles)
 
 if ~checkfields(scene,'data','luminance')
     [scene.data.luminance, scene.data.meanL] = sceneCalculateLuminance(scene);
-    ieReplaceObject(scene,val);
+    vcReplaceAndSelectObject(scene,val);
 end
 
 % Plots log10 or linear luminance as a mesh.
@@ -324,7 +367,6 @@ return
 % --------------------------------------------------------------------
 function plotRadiance_Callback(hObject, eventdata, handles)
 % Plot | Radiance (Quanta)
-% scenePlotRadiance('photons');
 scenePlot(vcGetObject('scene'),'radiance photons roi');
 return
 
@@ -378,36 +420,23 @@ scenePlot(vcGetObject('SCENE'), 'radiance waveband image');
 return
 
 % --------------------------------------------------------------------
-function menuPlotImTrueSize_Callback(hObject, eventdata, handles)
-% Plot | True Size Image
+function menuPlotImTrueSize_Callback(hObject, eventdata, handles) %#ok<*DEFNU>
+% Plot | Image (RGB)
 % Shows the image in the window in a separate window, with just the image
-% The spatial scale is 1 to 1 with the data (true size)
+% at true size. The spatial scale is 1 to 1 with the data (true size). 
 
-% Get the data
+% Get the necessary display data
 scene = vcGetObject('scene');
-spd = sceneGet(scene,'photons');
-w   = sceneGet(scene,'wave');
+displayFlag = get(handles.popupDisplay,'Value');
 gam = str2double(get(handles.editGamma,'String'));
 
-% Create the image
-RGB = imageSPD(spd,w,gam);
-
-% Save the current graph window figure;
-noNewGraphWin = 1;
-figNumSave = vcSelectFigure('GRAPHWIN',noNewGraphWin);
-
-% Create a new figure for the truesize image
-figNumTRUESIZE = figure;
-image(RGB);
-truesize
-% Turn off the menu and so forth
-set(figNumTRUESIZE,'menubar','none','name','ISET');
-
-% Make sure the saved image is reset to the current graph window
-if ~isempty(figNumSave), ieSessionSet('graphWinFigure',figNumSave); end
+% Call same routine as shows the image in the GUI, but put the image in a
+% new graph window.  The image displays at true size.  To change the size,
+% you can call truesize(gcf,[row,col])
+vcNewGraphWin;
+sceneShowImage(scene,displayFlag,gam);
 
 return
-
 
 % --------------------------------------------------------------------
 function menuPlotMultipleRGB_Callback(hObject, eventdata, handles)
@@ -436,7 +465,7 @@ return
 
 % --------------------------------------------------------------------
 function menuSaveImage_Callback(hObject, eventdata, handles)
-% File | Save (.tif)
+% File | Save (.png)
 gam = str2double(get(handles.editGamma,'String'));
 [val, scene] = vcGetSelectedObject('SCENE');
 sceneSaveImage(scene,[],gam);
@@ -456,7 +485,7 @@ if isempty(newName),  return;
 else                  scene = sceneSet(scene,'name',newName);
 end
 
-vcAddAndSelectObject('scene',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);  
 return;
 
@@ -533,11 +562,10 @@ msgbox(str,'Illuminant');
 return
 
 % --------------------------------------------------------------------
-function menuPlotCIE_Callback(hObject, eventdata, handles)
-% Analyze | ROI Summary | Chromaticity
+function menuAnalyzeChromaticity_Callback(hObject, eventdata, handles)
 scene = vcGetObject('SCENE');
 scenePlot(scene,'chromaticity roi');
-return;
+return
 
 % --------------------------------------------------------------------
 function menuPlotDepth_Callback(hObject, eventdata, handles)
@@ -578,8 +606,7 @@ return;
 
 % --- Executes on selection change in popupImScale.
 function popupImScale_Callback(hObject, eventdata, handles)
-% Call back for the Adjust scene popup that scales the scene size.
-%
+% Rescale the scene data spatially.  To be eliminated 
 
 contents = get(hObject,'String');
 str = contents{get(hObject,'Value')};
@@ -597,7 +624,6 @@ switch lower(str)
     otherwise
         error('Unknown scale factor');
 end
-
 [val,scene] = vcGetSelectedObject('SCENE');
 scene = sceneInterpolate(scene,sFactor);
 vcReplaceObject(scene,val);
@@ -630,7 +656,7 @@ return;
 function menuSceneMacbethC_Callback(hObject, eventdata, handles)
 val = vcNewObjectValue('SCENE');
 scene =  sceneCreate('macbethC');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -639,7 +665,7 @@ function menuSceneMacbethTungsten_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene =  sceneCreate('macbethTungsten');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -649,7 +675,7 @@ function menuSceneMacbethD50_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene =  sceneCreate('macbethD50');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -659,7 +685,7 @@ function menuSceneMacbethFluorescent_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene =  sceneCreate('macbethFluorescent');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -669,7 +695,7 @@ function menuSceneMacbethD65_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene =  sceneCreate('macbethD65');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -678,9 +704,9 @@ return;
 function menuSceneMacbethVisIR_Callback(hObject, eventdata, handles)
 % Scene | Macbeth Charts | Visible-InfraRed
 
-spectrum.wave = ieReadNumber('Enter waves','380:4:1068','%.0f');
-scene =  sceneCreate('macbethEE_IR',[],spectrum);
-vcAddAndSelectObject('SCENE',scene);
+wave = ieReadNumber('Enter waves','380:4:1068','%.0f');
+scene =  sceneCreate('macbethEE_IR',[],wave);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -690,7 +716,7 @@ function menuSceneLstar_Callback(hObject, eventdata, handles)
 % Create vertical bars with equal L* steps
 
 scene =  sceneCreate('lstar');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return
@@ -705,7 +731,7 @@ function menuSceneMultiSpec_Callback(hObject, eventdata, handles)
 %
 scene = sceneFromFile([],'multispectral');
 if isempty(scene), return; end
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -715,7 +741,7 @@ function menuSceneChooseRGB_Callback(hObject, eventdata, handles)
 %
 scene = sceneFromFile([],'rgb');
 if isempty(scene), return; end
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -726,7 +752,7 @@ function menuFileChooseFileMono_Callback(hObject, eventdata, handles)
 %
 scene = sceneFromFile([],'monochrome');
 if isempty(scene), return; end
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -740,7 +766,7 @@ function menuSceneMackay_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('mackay');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -749,34 +775,34 @@ return;
 function menuScenesSweep_Callback(hObject, eventdata, handles)
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('sweep');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
 % --------------------------------------------------------------------
 function menuSceneSlantedBar_Callback(hObject, eventdata, handles)
 scene = sceneCreate('slantedBar');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
 function menuSceneZonePlate_Callback(hObject, eventdata, handles)
 scene = sceneCreate('zonePlate');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
 % --------------------------------------------------------------------
 function menuSceneFreqOrient_Callback(hObject, eventdata, handles)
 scene = sceneCreate('freqorientpattern');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
 % --------------------------------------------------------------------
 function menuSceneCheckerboard_Callback(hObject, eventdata, handles)
 scene = sceneCreate('checkerBoard');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -785,7 +811,7 @@ function menuScenePointArray_Callback(hObject, eventdata, handles)
 % Scene | Patterns | PointArray (D65)
 
 scene = sceneCreate('pointarray',[],[],'d65');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -795,13 +821,13 @@ function menuSceneGridLines_Callback(hObject, eventdata, handles)
 % Scene | Patterns | PointArray (D65)
 
 scene = sceneCreate('GridLines',[],[],'d65');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
 function menuSceneRadialLines_Callback(hObject, eventdata, handles)
 scene = sceneCreate('radialLines');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -810,7 +836,7 @@ function menuSceneNoise_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('noise');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -820,7 +846,7 @@ function menuHarmonic_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('harmonic');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -833,7 +859,7 @@ function menuSceneTestLine_Callback(hObject, eventdata, handles)
 
 [val,scene] = vcGetSelectedObject('SCENE');
 scene = sceneCreate('impulse1dd65',256);
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject,eventdata,handles);
 
 return;
@@ -843,7 +869,7 @@ function menuScenesRamp_Callback(hObject, eventdata, handles)
 
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('ramp');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -857,7 +883,7 @@ function menuSceneUniformPhoton_Callback(hObject, eventdata, handles)
 % Scene | Uniform | Equal Photon
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('uniformequalphoton');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -868,7 +894,7 @@ function menuSceneUniformEE_Callback(hObject, eventdata, handles)
 % Scene | Uniform | Equal Energy
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('uniformee');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -880,7 +906,7 @@ wavelength = ieReadNumber('Enter waves','380:4:1068','%.0f');
 if isempty(wavelength), disp('User canceled.'); return; end
 
 scene = sceneCreate('uniformeeSpecify',sz,wavelength);
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -901,7 +927,7 @@ else
 end
 
 scene = sceneCreate('uniformbb',sz,cTemp,wave);
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -911,7 +937,7 @@ function menuUniformD65_Callback(hObject, eventdata, handles)
 % Scene | Uniform | D65
 val = vcNewObjectValue('SCENE');
 scene = sceneCreate('uniformD65');
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -923,7 +949,7 @@ return;
 % --------------------------------------------------------------------
 function menuEditNewScene_Callback(hObject, eventdata, handles)
 scene = sceneCreate;
-vcAddAndSelectObject('SCENE',scene);
+ieAddObject(scene);
 sceneRefresh(hObject, eventdata, handles);
 return;
 
@@ -934,7 +960,10 @@ return
 
 % --------------------------------------------------------------------
 function menuEditFontSize_Callback(hObject, eventdata, handles)
+% Edit | Change Font Size
+
 ieFontSizeSet(handles.figure1);
+
 return;
 
 % --------------------------------------------------------------------
@@ -975,7 +1004,7 @@ if isempty(newName),  return;
 else    scene = sceneSet(scene,'name',newName);
 end
 
-ieReplaceObject(scene,val)
+vcReplaceAndSelectObject(scene,val)
 sceneRefresh(hObject,eventdata,handles);
 
 return;
@@ -1102,7 +1131,7 @@ return;
 
 % --------------------------------------------------------------------
 function menuEditViewer_Callback(hObject, eventdata, handles)
-scene = vcGetObject('scene');
+scene = vcGetSelectedObject('scene');
 img = sceneGet(scene,'photons');
 rgb = imageSPD(img,sceneGet(scene,'wavelength'));
 ieViewer(rgb);
@@ -1132,7 +1161,7 @@ w = sceneGet(s,'wavelength');
 newWave = ieReadNumber('Enter new wavelength',w,'%.0f');
 s = sceneSet(s,'wave',newWave);
 
-ieReplaceObject(s);
+vcReplaceAndSelectObject(s);
 sceneRefresh(hObject, eventdata, handles);
 
 return;
@@ -1160,11 +1189,6 @@ function menuEditSetIlluminant_Callback(hObject, eventdata, handles)
 % Edit | Adjust SPD | Change Illuminant
 
 scene = vcGetObject('scene');
-
-% Hmm.  It is possible for there to be a scene window without any entry in
-% the database.  I am not sure that is OK or how to handle it (BW). 
-if isempty(scene), error('No scene in database'); end
-
 scene = sceneAdjustIlluminant(scene);
 
 % Replace and refresh
@@ -1174,45 +1198,38 @@ return;
 
 % --------------------------------------------------------------------
 function menuHelp_Callback(hObject, eventdata, handles)
-return;
+return
+
+% --------------------------------------------------------------------
+% function menuHelpISETmanual_Callback(hObject, eventdata, handles)
+% % Help | Iset manual (pdf)
+% ieManualViewer('pdf','ISET_Manual');
+% return
 
 % --------------------------------------------------------------------
 function menuHelpAppNotes_Callback(hObject, eventdata, handles)
 % Help | Documentation (web)
-web('https://github.com/isetbio/isetbio/wiki','-browser');
-return;
+ieManualViewer('imageval code');
+return
 
 % --------------------------------------------------------------------
 function menuHelpSceneProgrammers_Callback(hObject, eventdata, handles)
 % Help | Scene Programmers (online)
-web('https://github.com/isetbio/isetbio/wiki','-browser');
+ieManualViewer('scene functions');
 return
 
 % --------------------------------------------------------------------
 function menuHelpProgGuide_Callback(hObject, eventdata, handles)
-% Help | Iset Programmers (online)
-web('https://github.com/isetbio/isetbio/wiki','-browser');
-return;
+% Help | ISET functions (online)
+ieManualViewer('iset functions');
+return
 
 
-% --- Executes on button press in bntNext.
-function bntNext_Callback(hObject, eventdata, handles)
-% Push button with the + on the right of the selection popup
-s  = ieSessionGet('selected','scene');
-nS = ieSessionGet('nobjects','scene');
-s = min(s + 1,nS);
-s = max(s,1);
-vcSetSelectedObject('scene',s);
-sceneRefresh(hObject, eventdata, handles);
-return;
+% --------------------------------------------------------------------
+function menuFileRefresh_Callback(hObject, eventdata, handles)
+% hObject    handle to menuFileRefresh (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
 
-% --- Executes on button press in btnPrev.
-function btnPrev_Callback(hObject, eventdata, handles)
-% Push button with the - on the left of the selection popup
-s  = ieSessionGet('selected','scene');
-nS = ieSessionGet('nobjects','scene');
-s = min(s - 1,nS);
-s = max(s,1);
-vcSetSelectedObject('scene',s);
-sceneRefresh(hObject, eventdata, handles);
-return;
+
+
