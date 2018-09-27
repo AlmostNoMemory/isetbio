@@ -19,7 +19,7 @@ ieInit
 %% This is the basic radiance to irradiance code 
 % Creates an array of points
 scene = sceneCreate('point array');   
-scene = sceneSet(scene,'hfov',0.5);  
+scene = sceneSet(scene,'hfov',1);  
 ieAddObject(scene); sceneWindow;
 
 %% Diffraction limited optics
@@ -36,6 +36,14 @@ oi2 = oiSet(oi,'optics fnumber',fnBig);
 oi2 = oiCompute(scene,oi2);
 oi2 = oiSet(oi2,'name',sprintf('lens f# %d\n',fnBig));
 ieAddObject(oi2); oiWindow;
+
+%% NEW
+vcNewGraphWin;
+thisWave = 600;
+roiLocs = [];
+oiPlot(oi,'psf',roiLocs,thisWave);
+set(gca,'xlim',[-20 20],'ylim',[-20 20]);
+colormap(0.5*copper + 0.5*ones(size(copper)));
 
 %% Plot the psf of the optics
 vcNewGraphWin;
